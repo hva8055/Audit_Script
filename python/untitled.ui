@@ -2,6 +2,14 @@
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>594</width>
+    <height>389</height>
+   </rect>
+  </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
@@ -27,7 +35,7 @@
      <string/>
     </property>
     <property name="pixmap">
-     <pixmap>:/newPrefix/C:/Users/Revanth Aradya u/Downloads/Gemini_Generated_Image_fr7qk2fr7qk2fr7q.png</pixmap>
+     <pixmap resource="images.qrc">:/newPrefix/back.png</pixmap>
     </property>
     <property name="scaledContents">
      <bool>true</bool>

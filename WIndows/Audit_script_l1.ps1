@@ -40,6 +40,67 @@ function Write-Result {
 # Account & Password Policies
 # ===============================
 
+# Export local security policies
+if (-not (Test-Path C:\Temp)) { New-Item -Path C:\Temp -ItemType Directory | Out-Null }
+secedit /export /cfg C:\Temp\secpol.cfg | Out-Null
+$secContent = Get-Content C:\Temp\secpol.cfg
+
+# --- Password Policies ---
+
+# Enforce password history
+$line = $secContent | Select-String "PasswordHistorySize"
+$current = if ($line) { $line.ToString().Split('=')[1].Trim() } else { "Not Found" }
+$expected = 24
+Write-Result "Enforce password history" $current "$expected or more" ([int]$current -ge $expected)
+
+# Maximum password age
+$line = $secContent | Select-String "MaximumPasswordAge"
+$current = if ($line) { $line.ToString().Split('=')[1] } else { "Not Found" }
+$expected = 365
+Write-Result "Maximum password age" $current "$expected or fewer (not 0)" (([int]$current -le $expected) -and ([int]$current -ne 0))
+
+# Minimum password age
+$line = $secContent | Select-String "MinimumPasswordAge"
+$current = if ($line) { $line.ToString().Split('=')[1] } else { "Not Found" }
+$expected = 1
+Write-Result "Minimum password age" $current "$expected or more" ([int]$current -ge $expected)
+
+# Minimum password length
+$line = $secContent | Select-String "MinimumPasswordLength"
+$current = if ($line) { $line.ToString().Split('=')[1].Trim() } else { "Not Found" }
+$expected = 14
+Write-Result "Minimum password length" $current "$expected or more" ([int]$current -ge $expected)
+
+# Password must meet complexity requirements
+$line = $secContent | Select-String "PasswordComplexity"
+$current = if ($line) { $line.ToString().Split('=')[1].Trim() } else { "Not Found" }
+Write-Result "Password must meet complexity requirements" $current "Enabled (1)" ($current -eq "1")
+
+# Relax minimum password length limits (manual / registry-based)
+$regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\SAM"
+$regKey = "RelaxMinimumPasswordLengthLimits"
+$current = if (Get-ItemProperty -Path $regPath -Name $regKey -ErrorAction SilentlyContinue) {
+    (Get-ItemProperty -Path $regPath).$regKey
+} else { "Not Found" }
+Write-Result "Relax minimum password length limits" $current "Enabled (1)" ($current -eq 1)
+
+# Store passwords using reversible encryption
+$line = $secContent | Select-String "ClearTextPassword"
+$current = if ($line) { $line.ToString().Split('=')[1].Trim() } else { "Not Found" }
+Write-Result "Store passwords using reversible encryption" $current "Disabled (0)" ($current -eq "0")
+
+# --- Account Lockout Policies ---
+
+
+# Account lockout threshold
+$line = $secContent | Select-String "LockoutBadCount"
+$current = if ($line) { $line.ToString().Split('=')[1].Trim() } else { "Not Found" }
+$expected = 5
+Write-Result "Account lockout threshold" $current "$expected or fewer (not 0)" (([int]$current -le $expected) -and ([int]$current -ne 0))
+
+# Allow Administrator account lockout (manual check)
+Write-Result "Allow Administrator account lockout" "Manual Check Required" "Enabled" $false
+
 function Audit-MinPasswordLength     {
     $line = secedit /export /cfg C:\Temp\secedit.inf | Select-String "MinimumPasswordLength"
     if ($line) { 
@@ -457,6 +518,6 @@ Audit-RemoveRunCommand
 # Export Results
 # ===============================
 $r = Get-Location
-$csvPath = "$($r)\csv\Win11_Level1_Audit.csv"
+$csvPath = "$($r)\python\csv\Win11_Level1_Audit.csv"
 $Results | Export-Csv -Path $csvPath -NoTypeInformation -Force
 Write-Host "Audit complete. Results exported to $csvPath" -ForegroundColor Green
