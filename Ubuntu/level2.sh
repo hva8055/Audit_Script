@@ -1,16 +1,17 @@
-  #!/bin/bash
+#!/bin/bash
 
 # =============================================================================
-# Ubuntu Benchmark Audit Script
+# Ubuntu Benchmark Audit Script - Level 2
 #
 # This script audits a system based on the provided benchmark list.
 # It outputs results to both the console (with colors) and a CSV file.
 #
-# Usage: sudo ./audit.sh
+# Usage: sudo ./level2.sh
 # =============================================================================
 
 # --- Configuration ---
-OUTPUT_CSV="audit_report.csv"
+# Changed filename to be specific to this level to avoid conflicts.
+OUTPUT_CSV="csv/audit_report_level2.csv"
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -437,13 +438,6 @@ check_6_2_5() {
     fi
 }
 
-check_6_2_6() {
-    local id="6.2.6"
-    local title="Ensure access to wireless networks is secured (Manual)"
-    echo -e "\nChecking [$id] $title..."
-    log_result "$id" "$title" "MANUAL_CHECK_REQUIRED" "Verify WPA2/WPA3/EAP is in use."
-}
-
 check_6_4_1() {
     # Ubuntu uses AppArmor, not SELinux. This check is for SELinux.
     echo -e "\nChecking [6.4.1] Ensure SELinux is installed..."
@@ -495,7 +489,7 @@ check_6_6_3() {
 # =============================================================================
 main() {
     echo "=================================================="
-    echo "Starting Ubuntu Benchmark Audit..."
+    echo "Starting Ubuntu Benchmark Audit (Level 2)..."
     echo "Results will be shown here and saved to: $OUTPUT_CSV"
     echo "=================================================="
     
@@ -534,7 +528,6 @@ main() {
     check_6_2_2
     check_6_2_3
     check_6_2_5
-    check_6_2_6
     check_6_4_1
     check_6_4_2
     check_6_4_3

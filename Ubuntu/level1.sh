@@ -1,153 +1,323 @@
 #!/bin/bash
 
-# ===================================================================================
-# Linux Security Benchmark Audit Script (Level 1) with Live Status
+# =============================================================================
+# Ubuntu Benchmark Audit Script - Level 1
 #
-# Description: This script checks a list of security benchmarks, reports the live
-#              status with color-coding in the terminal, and outputs the final
-#              results to a clean CSV file.
+# This script audits a system based on the CIS Level 1 benchmarks.
+# It outputs results to both the console (with colors) and a CSV file.
 #
-# Usage:       sudo bash benchmark_audit_live.sh > audit_results.csv
-#              (You will see the progress in your terminal, and the CSV will be
-#              saved to 'audit_results.csv')
-# ===================================================================================
+# Usage: sudo ./level1.sh
+# =============================================================================
 
-# Ensure the script is run as root
-if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root." >&2
-   exit 1
-fi
+# --- Configuration ---
+OUTPUT_CSV="csv/audit_report_level1.csv"
 
-# --- Color Definitions for Terminal Output ---
-GREEN='\033[0;32m'
+# --- Colors ---
 RED='\033[0;31m'
-YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# --- Helper Functions ---
-
-# Checks if a given path is a mount point
-is_mounted() { findmnt -n "$1" &>/dev/null; }
-
-# Checks if a mount point has a specific option
-check_mount_option() {
-    local path="$1"
-    local option="$2"
-    if is_mounted "$path"; then
-        findmnt -n -o OPTIONS "$path" | grep -wq "$option"
-    else
-        return 1
-    fi
-}
-
-# Checks file permissions and ownership
-check_perms() {
-    local path="$1"
-    local perms="$2"
-    local owner_group="$3"
-    if [ ! -e "$path" ]; then
-        if [[ "$path" == "/etc/at.allow" || "$path" == "/etc/cron.allow" || "$path" == "/etc/anacrontab" ]]; then
-            return 0
-        else
-            return 1
-        fi
-    fi
-    [[ "$(stat -c "%a %U:%G" "$path")" == "$perms $owner_group" ]]
-}
-
-# --- Core Check and Reporting Function ---
-# Arguments: ID, Title, Profile, Command to execute
-run_check() {
--    local id="$1"
-    local title="$2"
-    local profile="$3"
-    local command_to_run="$4"
-    local result
-
-    # Print the "currently running" message to the terminal (stderr)
-    echo -e " Running: ${id} - ${title}..." >&2
-
-    # Evaluate the command and store its output ("Pass", "Fail", etc.)
-    result=$(eval "$command_to_run")
-
-    # Display Pass/Fail/Manual status in the terminal (stderr)
-    if [[ "$result" == "Pass" ]]; then
-        echo -e "${GREEN}  [PASS]${NC}" >&2
-    elif [[ "$result" == "Fail" ]]; then
-        echo -e "${RED}  [FAIL]${NC}" >&2
-    else # Manual Check
-        echo -e "${YELLOW}  [MANUAL]${NC}" >&2
-    fi
-
-    # Print the clean CSV line to standard output (for the file)
-    echo "$id,\"$title\",$profile,$result"
-}
-
-
-# --- System Detection ---
-DISTRO=""
-if [ -f /etc/redhat-release ]; then
-    DISTRO="RHEL"
-elif [ -f /etc/debian_version ]; then
-    DISTRO="DEBIAN"
+# --- Root Check ---
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}Please run this script as root or with sudo.${NC}"
+  exit 1
 fi
 
-# --- Script Main Body ---
+# =============================================================================
+# --- Helper Functions (similar to level2.sh) ---
+# =============================================================================
 
-# Print CSV Header to standard output
-echo "ID,Title,Profile,Result"
-echo "Starting Level 1 Audit..." >&2
+# Initialize the CSV file with a header
+init_csv() {
+    echo "ID,Title,Status,Finding" > "$OUTPUT_CSV"
+}
 
-# --- 1.1 Initial Setup ---
-run_check "1.1.1" "Ensure GPG keys are managed" "L1" 'if [[ "$DISTRO" == "RHEL" ]]; then if ! grep -Psiq "^\s*gpgcheck\s*=\s*0" /etc/yum.conf /etc/yum.repos.d/*.repo; then echo "Pass"; else echo "Fail"; fi; elif [[ "$DISTRO" == "DEBIAN" ]]; then if ! grep -r "trusted=yes" /etc/apt/sources.list /etc/apt/sources.list.d/ &>/dev/null; then echo "Pass"; else echo "Fail"; fi; else echo "Not Applicable"; fi'
-run_check "1.1.2" "Ensure separate partition exists for /tmp" "L1" 'if is_mounted "/tmp"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.5" "Ensure separate partition exists for /var/log/audit" "L1" 'if is_mounted "/var/log/audit"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.6" "Ensure separate partition exists for /home" "L1" 'if is_mounted "/home"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.7" "Ensure nodev option is set for /tmp" "L1" 'if check_mount_option "/tmp" "nodev"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.8" "Ensure nodev option is set for /var/tmp" "L1" 'if check_mount_option "/var/tmp" "nodev"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.9" "Ensure nosuid option is set for /tmp" "L1" 'if check_mount_option "/tmp" "nosuid"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.10" "Ensure nosuid option is set for /var/tmp" "L1" 'if check_mount_option "/var/tmp" "nosuid"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.11" "Ensure noexec option is set for /tmp" "L1" 'if check_mount_option "/tmp" "noexec"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.12" "Ensure noexec option is set for /var/tmp" "L1" 'if check_mount_option "/var/tmp" "noexec"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.13" "Ensure nodev option is set for removable media partitions" "L1" 'echo "Manual Check Required"'
-run_check "1.1.14" "Ensure nosuid option is set for removable media partitions" "L1" 'echo "Manual Check Required"'
-run_check "1.1.15" "Ensure noexec option is set for removable media partitions" "L1" 'echo "Manual Check Required"'
-run_check "1.1.16" "Ensure sticky bit is set on all world-writable directories" "L1" 'if [ -z "$(find / -path /proc -prune -o -path /sys -prune -o -type d \( -perm -0002 -a ! -perm -1000 \) -print 2>/dev/null)" ]; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.1.19" "Ensure noexec option is set on /dev/shm" "L1" 'if check_mount_option "/dev/shm" "noexec"; then echo "Pass"; else echo "Fail"; fi'
+# Log a result to the console AND to the CSV file
+log_result() {
+    local id="$1"
+    local title="$2"
+    local status="$3"
+    local finding="$4"
+    local finding_csv
+    
+    case "$status" in
+        PASS) echo -e "  ${GREEN}[PASS]${NC} $finding" ;;
+        FAIL) echo -e "  ${RED}[FAIL]${NC} $finding" ;;
+        MANUAL_CHECK_REQUIRED) echo -e "  ${YELLOW}[MANUAL]${NC} $finding" ;;
+        INFO) echo -e "  ${YELLOW}[INFO]${NC} $finding" ;;
+    esac
 
-# --- 1.2 Package Manager Configuration ---
-run_check "1.2.1" "Ensure package manager configuration file permissions are correctly set" "L1" 'if [[ "$DISTRO" == "RHEL" ]]; then if check_perms "/etc/yum.conf" "644" "root:root" && ! find /etc/yum.repos.d/ -type f -exec stat -c "%a %U:%G" {} + | grep -qv "644 root:root"; then echo "Pass"; else echo "Fail"; fi; elif [[ "$DISTRO" == "DEBIAN" ]]; then if check_perms "/etc/apt/sources.list" "644" "root:root" && ! find /etc/apt/sources.list.d/ -type f -exec stat -c "%a %U:%G" {} + | grep -qv "644 root:root"; then echo "Pass"; else echo "Fail"; fi; else echo "Not Applicable"; fi'
-run_check "1.2.2" "Ensure GPG key is configured for package manager" "L1" 'if [[ "$DISTRO" == "RHEL" ]]; then if ! grep -Psiq "^\s*gpgcheck\s*=\s*0" /etc/yum.conf /etc/yum.repos.d/*.repo; then echo "Pass"; else echo "Fail"; fi; elif [[ "$DISTRO" == "DEBIAN" ]]; then if ! grep -r "trusted=yes" /etc/apt/sources.list /etc/apt/sources.list.d/ &>/dev/null; then echo "Pass"; else echo "Fail"; fi; else echo "Not Applicable"; fi'
+    finding_csv=$(echo "$finding" | sed 's/"/""/g')
+    echo "\"$id\",\"$title\",\"$status\",\"$finding_csv\"" >> "$OUTPUT_CSV"
+}
 
-# --- 1.3 Filesystem Integrity ---
-run_check "1.3.1" "Ensure aide is installed" "L1" 'if command -v aide &>/dev/null; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.3.2" "Ensure filesystem integrity is regularly checked" "L1" 'if grep -rhq aide /etc/cron* /var/spool/cron; then echo "Pass"; else echo "Fail"; fi'
+# Check sysctl values
+check_sysctl() {
+    local id="$1"; local title="$2"; local param="$3"; local expected="$4"
+    local current
+    echo -e "\nChecking [$id] $title..."
+    if ! current=$(sysctl -n "$param" 2>/dev/null); then
+        log_result "$id" "$title" "FAIL" "Sysctl parameter '$param' not found."
+        return
+    fi
+    if [[ "$current" == "$expected" ]]; then
+        log_result "$id" "$title" "PASS" "'$param' is set to '$current'."
+    else
+        log_result "$id" "$title" "FAIL" "'$param' is '$current', expected '$expected'."
+    fi
+}
 
-# --- 1.4 File Permissions ---
-run_check "1.4.1" "Ensure permissions on /etc/shadow are configured" "L1" 'if check_perms "/etc/shadow" "0" "root:shadow"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.2" "Ensure permissions on /etc/gshadow are configured" "L1" 'if check_perms "/etc/gshadow" "0" "root:shadow"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.3" "Ensure permissions on /etc/passwd are configured" "L1" 'if check_perms "/etc/passwd" "644" "root:root"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.4" "Ensure permissions on /etc/group are configured" "L1" 'if check_perms "/etc/group" "644" "root:root"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.5" "Ensure permissions on /etc/at.allow are configured" "L1" 'if check_perms "/etc/at.allow" "600" "root:root"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.6" "Ensure permissions on /etc/cron.allow are configured" "L1" 'if check_perms "/etc/cron.allow" "600" "root:root"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.7" "Ensure permissions on /etc/crontab are configured" "L1" 'if check_perms "/etc/crontab" "600" "root:root"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.8" "Ensure permissions on /etc/anacrontab are configured" "L1" 'if check_perms "/etc/anacrontab" "600" "root:root"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.9" "Ensure permissions on /etc/ssh/sshd_config are configured" "L1" 'if check_perms "/etc/ssh/sshd_config" "600" "root:root"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.4.10" "Ensure access to the su command is restricted" "L1" 'if grep -qE "^\s*auth\s+required\s+pam_wheel.so\s+use_uid" /etc/pam.d/su; then echo "Pass"; else echo "Fail"; fi'
+# Check if a package is NOT installed
+check_pkg_not_installed() {
+    local id="$1"; local title="$2"; local pkg="$3"
+    echo -e "\nChecking [$id] $title..."
+    if dpkg -s "$pkg" &>/dev/null; then
+        log_result "$id" "$title" "FAIL" "Package '$pkg' is installed."
+    else
+        log_result "$id" "$title" "PASS" "Package '$pkg' is not installed."
+    fi
+}
 
-# --- 1.5 System Hardening ---
-run_check "1.5.1" "Ensure core dumps are restricted" "L1" 'if grep -qE "^\s*\*\s+hard\s+core\s+0" /etc/security/limits.conf /etc/security/limits.d/* &>/dev/null && sysctl fs.suid_dumpable | grep -q "fs.suid_dumpable = 0"; then echo "Pass"; else echo "Fail"; fi'
-run_check "1.5.3" "Ensure address space layout randomization (ASLR) is enabled" "L1" 'if sysctl kernel.randomize_va_space | grep -q "kernel.randomize_va_space = 2"; then echo "Pass"; else echo "Fail"; fi'
+# Check if a package IS installed
+check_pkg_installed() {
+    local id="$1"; local title="$2"; local pkg="$3"
+    echo -e "\nChecking [$id] $title..."
+    if dpkg -s "$pkg" &>/dev/null; then
+        log_result "$id" "$title" "PASS" "Package '$pkg' is installed."
+    else
+        log_result "$id" "$title" "FAIL" "Package '$pkg' is not installed."
+    fi
+}
 
-# --- 1.6 AppArmor ---
-run_check "1.6.1" "Ensure AppArmor is installed" "L1" 'if [[ "$DISTRO" == "DEBIAN" ]]; then if command -v apparmor_status &>/dev/null; then echo "Pass"; else echo "Fail"; fi; else echo "Not Applicable"; fi'
-run_check "1.6.2" "Ensure all recommended AppArmor profiles are loaded" "L1" 'if [[ "$DISTRO" == "DEBIAN" ]]; then if command -v apparmor_status &>/dev/null && apparmor_status | grep -q "profiles are in enforce mode"; then echo "Pass"; else echo "Fail"; fi; else echo "Not Applicable"; fi'
-run_check "1.6.3" "Ensure AppArmor is enabled" "L1" 'if [[ "$DISTRO" == "DEBIAN" ]]; then if systemctl is-enabled --quiet apparmor && systemctl is-active --quiet apparmor; then echo "Pass"; else echo "Fail"; fi; else echo "Not Applicable"; fi'
+# Check file permissions and ownership
+# $1: ID, $2: Title, $3: File Path, $4: Expected Permissions (octal), $5: Expected Owner, $6: Expected Group
+check_file_perms() {
+    local id="$1"; local title="$2"; local file="$3"; local perms="$4"; local owner="$5"; local group="$6"
+    echo -e "\nChecking [$id] $title..."
+    if [ ! -e "$file" ]; then
+        log_result "$id" "$title" "FAIL" "File '$file' does not exist."
+        return
+    fi
+    local current_perms; current_perms=$(stat -c "%a" "$file")
+    local current_owner; current_owner=$(stat -c "%U" "$file")
+    local current_group; current_group=$(stat -c "%G" "$file")
+    local pass=true
+    local issues=""
 
-# --- 2 Services ---
-run_check "2.1.1" "Ensure unnecessary services are disabled" "L1" 'echo "Manual Check Required"'
-run_check "2.2.1" "Ensure time synchronization is in use" "L1" 'if (systemctl is-active --quiet chronyd || systemctl is-active --quiet ntpd || systemctl is-active --quiet systemd-timesyncd) && (systemctl is-enabled --quiet chronyd || systemctl is-enabled --quiet ntpd || systemctl is-enabled --quiet systemd-timesyncd); then echo "Pass"; else echo "Fail"; fi'
-run_check "2.3.1" "Ensure X Window System is not installed" "L1" 'if [[ "$DISTRO" == "RHEL" ]]; then if ! rpm -q xorg-x11-server-common &>/dev/null; then echo "Pass"; else echo "Fail"; fi; elif [[ "$DISTRO" == "DEBIAN" ]]; then if ! dpkg -s xserver-xorg-core &>/dev/null; then echo "Pass"; else echo "Fail"; fi; else echo "Not Applicable"; fi'
-run_check "2.4.1" "Ensure Avahi Server is not enabled" "L1" 'if ! systemctl is-enabled avahi-daemon &>/dev/null; then echo "Pass"; else echo "Fail"; fi'
+    if [ "$current_perms" != "$perms" ]; then
+        pass=false
+        issues+="Perms are $current_perms, expected $perms. "
+    fi
+    if [ "$current_owner" != "$owner" ]; then
+        pass=false
+        issues+="Owner is $current_owner, expected $owner. "
+    fi
+    if [ "$current_group" != "$group" ]; then
+        pass=false
+        issues+="Group is $current_group, expected $group. "
+    fi
 
-echo -e "\n${GREEN}Audit complete. Results saved to your specified file.${NC}" >&2
+    if $pass; then
+        log_result "$id" "$title" "PASS" "Permissions on '$file' are correctly set to $perms/$owner:$group."
+    else
+        log_result "$id" "$title" "FAIL" "Incorrect configuration for '$file'. $issues"
+    fi
+}
+
+# Check mount options on a given mount point
+# $1: ID, $2: Title, $3: Mount Point, $4: Option to check (e.g., nodev)
+check_mount_option() {
+    local id="$1"; local title="$2"; local mount_point="$3"; local option="$4"
+    echo -e "\nChecking [$id] $title..."
+    if ! findmnt --mountpoint "$mount_point" &>/dev/null; then
+        log_result "$id" "$title" "FAIL" "'$mount_point' is not a separate mount point."
+        return
+    fi
+    if findmnt -o OPTIONS --target "$mount_point" | grep -q "\b$option\b"; then
+        log_result "$id" "$title" "PASS" "'$option' option is set on '$mount_point'."
+    else
+        log_result "$id" "$title" "FAIL" "'$option' option is NOT set on '$mount_point'."
+    fi
+}
+
+# =============================================================================
+# --- Audit Check Functions ---
+# =============================================================================
+
+# --- Section 1.1 - Filesystem Configuration ---
+
+check_1_1_2() {
+    local id="1.1.2"; local title="Ensure separate partition exists for /tmp"
+    echo -e "\nChecking [$id] $title..."
+    if findmnt --mountpoint /tmp &>/dev/null; then
+        log_result "$id" "$title" "PASS" "/tmp is on a separate partition."
+    else
+        log_result "$id" "$title" "FAIL" "/tmp is not on a separate partition."
+    fi
+}
+
+check_1_1_5() {
+    local id="1.1.5"; local title="Ensure separate partition exists for /var/log/audit"
+    echo -e "\nChecking [$id] $title..."
+    if findmnt --mountpoint /var/log/audit &>/dev/null; then
+        log_result "$id" "$title" "PASS" "/var/log/audit is on a separate partition."
+    else
+        log_result "$id" "$title" "FAIL" "/var/log/audit is not on a separate partition."
+    fi
+}
+
+check_1_1_6() {
+    local id="1.1.6"; local title="Ensure separate partition exists for /home"
+    echo -e "\nChecking [$id] $title..."
+    if findmnt --mountpoint /home &>/dev/null; then
+        log_result "$id" "$title" "PASS" "/home is on a separate partition."
+    else
+        log_result "$id" "$title" "FAIL" "/home is not on a separate partition."
+    fi
+}
+
+check_1_1_7() { check_mount_option "1.1.7" "Ensure nodev option is set for /tmp" "/tmp" "nodev"; }
+check_1_1_9() { check_mount_option "1.1.9" "Ensure nosuid option is set for /tmp" "/tmp" "nosuid"; }
+check_1_1_11() { check_mount_option "1.1.11" "Ensure noexec option is set for /tmp" "/tmp" "noexec"; }
+check_1_1_19() { check_mount_option "1.1.19" "Ensure noexec option is set on /dev/shm" "/dev/shm" "noexec"; }
+
+check_1_1_16() {
+    local id="1.1.16"; local title="Ensure sticky bit is set on all world-writable directories"
+    echo -e "\nChecking [$id] $title..."
+    local dirs
+    dirs=$(find / -xdev -type d \( -perm -0002 -a ! -perm -1000 \) 2>/dev/null)
+    if [ -n "$dirs" ]; then
+        log_result "$id" "$title" "FAIL" "Sticky bit not set on world-writable dirs: $dirs"
+    else
+        log_result "$id" "$title" "PASS" "All world-writable directories have sticky bit set."
+    fi
+}
+
+
+# --- Section 1.3 - Filesystem Integrity ---
+check_1_3_1() { check_pkg_installed "1.3.1" "Ensure AIDE is installed" "aide"; }
+
+check_1_3_2() {
+    local id="1.3.2"; local title="Ensure filesystem integrity is regularly checked"
+    echo -e "\nChecking [$id] $title..."
+    if crontab -l -u root 2>/dev/null | grep -q 'aide' || grep -qr 'aide' /etc/cron.* /etc/crontab; then
+        log_result "$id" "$title" "PASS" "Found an 'aide' job in system cron files."
+    else
+        log_result "$id" "$title" "MANUAL_CHECK_REQUIRED" "Could not find an automated 'aide' cron job. Please verify manually."
+    fi
+}
+
+# --- Section 1.4 - File Permissions ---
+check_1_4_1() { check_file_perms "1.4.1" "Ensure permissions on /etc/shadow are configured" "/etc/shadow" "640" "root" "shadow"; }
+check_1_4_2() { check_file_perms "1.4.2" "Ensure permissions on /etc/gshadow are configured" "/etc/gshadow" "640" "root" "shadow"; }
+check_1_4_3() { check_file_perms "1.4.3" "Ensure permissions on /etc/passwd are configured" "/etc/passwd" "644" "root" "root"; }
+check_1_4_4() { check_file_perms "1.4.4" "Ensure permissions on /etc/group are configured" "/etc/group" "644" "root" "root"; }
+check_1_4_9() { check_file_perms "1.4.9" "Ensure permissions on /etc/ssh/sshd_config are configured" "/etc/ssh/sshd_config" "600" "root" "root"; }
+
+# --- Section 1.5 - Secure Boot Settings ---
+check_1_5_1() {
+    local id="1.5.1"; local title="Ensure core dumps are restricted"
+    echo -e "\nChecking [$id] $title..."
+    local hard_core_limit; hard_core_limit=$(grep -E '^\s*\*\s+hard\s+core' /etc/security/limits.conf /etc/security/limits.d/*)
+    local suid_dumpable; suid_dumpable=$(sysctl -n fs.suid_dumpable)
+    if [[ "$hard_core_limit" == *"0"* ]] && [ "$suid_dumpable" -eq 0 ]; then
+        log_result "$id" "$title" "PASS" "Core dumps are restricted in limits.conf and fs.suid_dumpable is 0."
+    else
+        log_result "$id" "$title" "FAIL" "Core dump restrictions not fully configured. limits.conf: '$hard_core_limit', fs.suid_dumpable: '$suid_dumpable'."
+    fi
+}
+
+check_1_5_3() { check_sysctl "1.5.3" "Ensure ASLR is enabled" "kernel.randomize_va_space" "2"; }
+
+# --- Section 1.6 - AppArmor ---
+check_1_6_1() { check_pkg_installed "1.6.1" "Ensure AppArmor is installed" "apparmor"; }
+
+check_1_6_2() {
+    local id="1.6.2"; local title="Ensure all recommended AppArmor profiles are loaded"
+     echo -e "\nChecking [$id] $title..."
+     if command -v aa-status &>/dev/null; then
+        if aa-status | grep -q "profiles are loaded"; then
+             log_result "$id" "$title" "PASS" "AppArmor profiles are loaded."
+        else
+             log_result "$id" "$title" "FAIL" "AppArmor profiles are not in enforce or complain mode."
+        fi
+     else
+        log_result "$id" "$title" "FAIL" "aa-status command not found."
+     fi
+}
+
+check_1_6_3() {
+    local id="1.6.3"; local title="Ensure AppArmor is enabled"
+    echo -e "\nChecking [$id] $title..."
+    if command -v aa-status &>/dev/null && aa-status | grep -q "apparmor module is loaded"; then
+        log_result "$id" "$title" "PASS" "AppArmor module is loaded."
+    else
+        log_result "$id" "$title" "FAIL" "AppArmor module is not loaded."
+    fi
+}
+
+# --- Section 2 - Services ---
+check_2_2_1() {
+    local id="2.2.1"; local title="Ensure time synchronization is in use"
+    echo -e "\nChecking [$id] $title..."
+    if timedatectl status 2>/dev/null | grep -q "NTP service: active"; then
+        log_result "$id" "$title" "PASS" "NTP service is active."
+    else
+        log_result "$id" "$title" "FAIL" "NTP service is not active."
+    fi
+}
+check_2_3_1() { check_pkg_not_installed "2.3.1" "Ensure X Window System is not installed" "xserver-xorg"; }
+
+# =============================================================================
+# --- Main Execution ---
+# =============================================================================
+main() {
+    echo "=================================================="
+    echo "Starting Ubuntu Benchmark Audit (Level 1)..."
+    echo "Results will be saved to: $OUTPUT_CSV"
+    echo "=================================================="
+    
+    init_csv
+    
+    # Filesystem Configuration
+    check_1_1_2
+    check_1_1_5
+    check_1_1_6
+    check_1_1_7
+    check_1_1_9
+    check_1_1_11
+    check_1_1_16
+    check_1_1_19
+
+    # Filesystem Integrity
+    check_1_3_1
+    check_1_3_2
+    
+    # File Permissions
+    check_1_4_1
+    check_1_4_2
+    check_1_4_3
+    check_1_4_4
+    check_1_4_9
+    
+    # Secure Boot Settings
+    check_1_5_1
+    check_1_5_3
+
+    # AppArmor
+    check_1_6_1
+    check_1_6_2
+    check_1_6_3
+
+    # Services
+    check_2_2_1
+    check_2_3_1
+    
+    echo "=================================================="
+    echo "Audit Complete. Report saved to $OUTPUT_CSV"
+    echo "=================================================="
+}
+
+# Run the main function
+main
