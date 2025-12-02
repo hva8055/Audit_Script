@@ -69,7 +69,7 @@ This project must be run inside a Python virtual environment.
 
 5.  **Run the script:**
 ```bash
-    python main.py
+    python app.py
 ```
 6 **Enter the root Password After you have runned the Python script**
 
@@ -90,5 +90,5 @@ This project must be run inside a Python virtual environment.
 ```
 3.  **Run the script:**
 ```bash
-    python main.py
+    python app.py
 ```
